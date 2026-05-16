@@ -1,17 +1,40 @@
 # Deployment Guide
 
-## Docker
+## Run with Node
 
-Use the existing `Dockerfile` to build the SpotNet backend image:
+This project is designed to run as a regular Node.js service.
+
+1. Copy `.env.example` to `.env` and fill in your secrets.
+2. Install dependencies:
+
+```bash
+npm install
+```
+
+3. Build the app:
+
+```bash
+npm run build
+```
+
+4. Start the server:
+
+```bash
+npm start
+```
+
+If you want to run only the worker process:
+
+```bash
+npm run worker
+```
+
+## Optional Docker
+
+If you later want to use Docker, the repository already includes a `Dockerfile`.
 
 ```bash
 docker build -t spotnet-backend .
-```
-
-Start the stack locally with Redis and MongoDB:
-
-```bash
-docker-compose up -d
 ```
 
 ## PM2
@@ -23,8 +46,8 @@ The `ecosystem.config.js` file defines two apps:
 Start them with:
 
 ```bash
-pm install -g pm2
-pm run build
+npm install -g pm2
+npm run build
 pm2 start ecosystem.config.js
 ```
 

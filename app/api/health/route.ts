@@ -4,8 +4,14 @@ import { getHealthMetrics } from '@/lib/metrics';
 import { getRedisClient } from '@/lib/redis';
 
 export async function GET() {
-  const redis = getRedisClient();
-  const redisStatus = redis.status || 'unknown';
+  let redisStatus = 'unknown';
+  try {
+    const redis = getRedisClient();
+    redisStatus = redis.status || 'unknown';
+  } catch (error) {
+    redisStatus = 'unavailable';
+  }
+
   const metrics = getHealthMetrics();
   return NextResponse.json({
     success: true,

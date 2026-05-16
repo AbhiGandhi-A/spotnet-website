@@ -1,6 +1,8 @@
 import { Queue, Worker, QueueEvents, JobsOptions } from 'bullmq';
 import { logInfo, logError, logWarn } from '@/utils/logger';
 
+const REDIS_ENABLED = Boolean(process.env.REDIS_URL);
+
 const connection = {
   host: process.env.REDIS_HOST || '127.0.0.1',
   port: Number(process.env.REDIS_PORT || 6379),
@@ -13,14 +15,42 @@ function getConnection() {
   return { connection };
 }
 
-export const videoProcessingQueue = new Queue('video-processing', getConnection());
-export const thumbnailQueue = new Queue('thumbnail-generation', getConnection());
-export const notificationQueue = new Queue('notification-delivery', getConnection());
-export const cleanupQueue = new Queue('cleanup-jobs', getConnection());
-export const analyticsQueue = new Queue('analytics-aggregation', getConnection());
-export const deadLetterQueue = new Queue('dead-letter-jobs', getConnection());
+class DummyQueue {
+  name: string;
+  jobs: any[] = [];
+  constructor(name: string) { this.name = name; }
+  async add(name: string, data: any, opts?: JobsOptions) {
+    const id = `${Date.now()}`;
+    this.jobs.push({ id, name, data, opts });
+    logWarn('In-memory queue used, job added locally', { queue: this.name, jobId: id });
+    return { id } as any;
+  }
+  async getWaitingCount() { return 0; }
+  async getActiveCount() { return 0; }
+  async getCompletedCount() { return 0; }
+  async getFailedCount() { return 0; }
+  async getDelayedCount() { return 0; }
+}
 
-export async function addQueueJob(queue: Queue, name: string, data: any, opts: JobsOptions = {}) {
+class DummyWorker {
+  on() { /* noop */ }
+}
+
+class DummyQueueEvents {
+  on() { /* noop */ }
+}
+
+export const videoProcessingQueue = REDIS_ENABLED ? new Queue('video-processing', getConnection()) : new DummyQueue('video-processing') as any;
+export const thumbnailQueue = REDIS_ENABLED ? new Queue('thumbnail-generation', getConnection()) : new DummyQueue('thumbnail-generation') as any;
+export const notificationQueue = REDIS_ENABLED ? new Queue('notification-delivery', getConnection()) : new DummyQueue('notification-delivery') as any;
+export const cleanupQueue = REDIS_ENABLED ? new Queue('cleanup-jobs', getConnection()) : new DummyQueue('cleanup-jobs') as any;
+export const analyticsQueue = REDIS_ENABLED ? new Queue('analytics-aggregation', getConnection()) : new DummyQueue('analytics-aggregation') as any;
+export const deadLetterQueue = REDIS_ENABLED ? new Queue('dead-letter-jobs', getConnection()) : new DummyQueue('dead-letter-jobs') as any;
+
+export async function addQueueJob(queue: any, name: string, data: any, opts: JobsOptions = {}) {
+  if (!REDIS_ENABLED) {
+    return queue.add(name, data, opts);
+  }
   return queue.add(name, data, {
     attempts: opts.attempts ?? 3,
     backoff: opts.backoff ?? { type: 'exponential', delay: 5000 },
@@ -31,6 +61,11 @@ export async function addQueueJob(queue: Queue, name: string, data: any, opts: J
 }
 
 export function createWorker(name: string, processor: (job: any) => Promise<any>, opts: { concurrency?: number } = {}) {
+  if (!REDIS_ENABLED) {
+    logWarn('Redis not configured. Workers disabled (in-memory/no-op).');
+    return new DummyWorker() as any;
+  }
+
   const worker = new Worker(name, async (job) => processor(job), {
     ...getConnection(),
     concurrency: opts.concurrency ?? 1,
@@ -53,7 +88,10 @@ export function createWorker(name: string, processor: (job: any) => Promise<any>
   return worker;
 }
 
-export async function getQueueStatus(queue: Queue) {
+export async function getQueueStatus(queue: any) {
+  if (!REDIS_ENABLED) {
+    return { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0 };
+  }
   return {
     waiting: await queue.getWaitingCount(),
     active: await queue.getActiveCount(),
@@ -64,6 +102,10 @@ export async function getQueueStatus(queue: Queue) {
 }
 
 export function setupQueueMonitoring() {
+  if (!REDIS_ENABLED) {
+    logWarn('Redis not configured. Queue monitoring disabled.');
+    return;
+  }
   const queueEvents = new QueueEvents('global-events', getConnection());
 
   queueEvents.on('completed', ({ jobId, returnvalue }) => {

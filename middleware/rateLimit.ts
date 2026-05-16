@@ -20,34 +20,39 @@ export async function rateLimit(req: IncomingMessage, res: ServerResponse) {
   const key = `rate:${ip}`;
   const blockKey = `rate:block:${ip}`;
 
-  const isBlocked = await redis.exists(blockKey);
-  if (isBlocked) {
-    res.statusCode = 429;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ success: false, error: 'Too many requests. Try again later.' }));
-    return false;
-  }
+  try {
+    const isBlocked = await redis.exists(blockKey);
+    if (isBlocked) {
+      res.statusCode = 429;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: false, error: 'Too many requests. Try again later.' }));
+      return false;
+    }
 
-  const requests = await redis.incr(key);
-  if (requests === 1) {
-    await redis.expire(key, WINDOW_SECONDS);
-  }
+    const requests = await redis.incr(key);
+    if (requests === 1) {
+      await redis.expire(key, WINDOW_SECONDS);
+    }
 
-  const ttl = await redis.ttl(key);
-  if (requests > MAX_REQUESTS) {
-    await redis.set(blockKey, '1', 'EX', BLOCK_SECONDS);
-    logWarn('Rate limit exceeded for IP', ip, 'requests', requests);
-    res.statusCode = 429;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ success: false, error: 'Rate limit exceeded. Try again later.' }));
-    return false;
-  }
+    const ttl = await redis.ttl(key);
+    if (requests > MAX_REQUESTS) {
+      await redis.set(blockKey, '1', 'EX', BLOCK_SECONDS);
+      logWarn('Rate limit exceeded for IP', ip, 'requests', requests);
+      res.statusCode = 429;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ success: false, error: 'Rate limit exceeded. Try again later.' }));
+      return false;
+    }
 
-  res.setHeader('X-RateLimit-Limit', String(MAX_REQUESTS));
-  res.setHeader('X-RateLimit-Remaining', String(Math.max(0, MAX_REQUESTS - requests)));
-  if (ttl > 0) {
-    res.setHeader('X-RateLimit-Reset', String(ttl));
-  }
+    res.setHeader('X-RateLimit-Limit', String(MAX_REQUESTS));
+    res.setHeader('X-RateLimit-Remaining', String(Math.max(0, MAX_REQUESTS - requests)));
+    if (ttl > 0) {
+      res.setHeader('X-RateLimit-Reset', String(ttl));
+    }
 
-  return true;
+    return true;
+  } catch (error) {
+    logWarn('Redis unavailable, skipping rate limit', error);
+    return true;
+  }
 }

@@ -37,7 +37,7 @@
 
 ## Environment Variables
 Required variables:
-- `DATABASE_URL`
+- `DATABASE_URL` or `MONGODB_URI`
 - `JWT_SECRET`
 - `REDIS_HOST` / `REDIS_PORT` or `REDIS_URL`
 - `FIREBASE_PROJECT_ID`

@@ -14,7 +14,11 @@ const handle = app.getRequestHandler();
 
 async function startServer() {
   await app.prepare();
-  await connectRedis();
+  if (process.env.REDIS_URL) {
+    await connectRedis();
+  } else {
+    console.warn('Redis not configured. Skipping Redis initialization on startup.');
+  }
 
   const server = http.createServer(async (req, res) => {
     try {
@@ -32,7 +36,12 @@ async function startServer() {
   });
 
   const io = initSocket(server);
-  io.adapter(getSocketRedisAdapter());
+  const adapter = getSocketRedisAdapter();
+  if (adapter) {
+    io.adapter(adapter);
+  } else {
+    console.warn('Redis adapter not configured. Socket.IO will run in single-process mode.');
+  }
 
   server.listen(port, () => {
     logInfo(`SpotNet backend running on http://localhost:${port}`);
