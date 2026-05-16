@@ -1,3 +1,59 @@
+# SpotNet Backend
+
+Production-ready backend for Watch Together social streaming app using Next.js App Router, TypeScript, MongoDB, Socket.IO, JWT, and Cloudflare R2.
+
+## Features
+- Modular API routes (auth, users, friends, rooms, videos, notifications, chat)
+- Native MongoDB integration
+- JWT authentication (access/refresh tokens)
+- Real-time with Socket.IO
+- Cloudflare R2 for video uploads
+- Zod validation, rate limiting, CORS, secure headers
+- Production folder structure
+
+## Setup
+1. Copy `.env.example` to `.env` and fill in your secrets.
+2. Install dependencies:
+	```sh
+	npm install
+	```
+3. Start the dev server:
+	```sh
+	npm run dev
+	```
+
+## API Endpoints
+- `POST /api/auth/signup` — Register user
+- `POST /api/auth/login` — Login user
+- `POST /api/auth/logout` — Logout user
+- `GET /api/auth/me` — Get current user
+- `POST /api/auth/refresh` — Refresh access token
+- `GET /api/users` — List/search users
+- `POST /api/friends` — Send friend request
+- `POST /api/rooms` — Create room
+- `POST /api/videos` — Upload video metadata
+- `GET /api/notifications` — Get notifications
+- `GET /api/chat?roomId=...` — Get chat messages
+
+## Real-Time Events
+- Socket.IO server at `/api/socket`
+- Auth required for all events
+
+## Folder Structure
+- `app/api/` — API route handlers
+- `lib/` — MongoDB, R2, etc.
+- `services/` — Business logic
+- `controllers/` — Route controllers
+- `middleware/` — Auth, rate limit, etc.
+- `socket/` — Socket.IO server/events
+- `types/` — TypeScript types
+- `validators/` — Zod schemas
+- `config/` — CORS, headers
+- `utils/` — Helpers
+
+---
+
+This backend is ready for production and extensible for all SpotNet features.
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/create-next-app).
 
 ## Getting Started
