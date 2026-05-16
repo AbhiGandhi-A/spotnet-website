@@ -1,7 +1,10 @@
 import { Queue, Worker, QueueEvents, JobsOptions } from 'bullmq';
 import { logInfo, logError, logWarn } from '@/utils/logger';
 
-const REDIS_ENABLED = Boolean(process.env.REDIS_URL);
+const REDIS_URL = process.env.REDIS_URL?.trim();
+const REDIS_HOST = process.env.REDIS_HOST?.trim();
+const REDIS_PORT = process.env.REDIS_PORT?.trim();
+const REDIS_ENABLED = Boolean(REDIS_URL || REDIS_HOST || REDIS_PORT);
 
 const connection = {
   host: process.env.REDIS_HOST || '127.0.0.1',

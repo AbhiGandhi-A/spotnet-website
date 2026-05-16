@@ -1,15 +1,18 @@
 import Redis, { RedisOptions } from 'ioredis';
 import { createAdapter } from '@socket.io/redis-adapter';
 
-const REDIS_ENABLED = Boolean(process.env.REDIS_URL);
+const REDIS_URL = process.env.REDIS_URL?.trim();
+const REDIS_HOST = process.env.REDIS_HOST?.trim();
+const REDIS_PORT = process.env.REDIS_PORT?.trim();
+const REDIS_CONFIGURED = Boolean(REDIS_URL || REDIS_HOST || REDIS_PORT);
 
 let redisClient: any = null;
 let pubClient: any = null;
 let subClient: any = null;
 
 const BASE_REDIS_OPTIONS: RedisOptions = {
-  host: process.env.REDIS_HOST || '127.0.0.1',
-  port: Number(process.env.REDIS_PORT || 6379),
+  host: REDIS_HOST || '127.0.0.1',
+  port: Number(REDIS_PORT || 6379),
   username: process.env.REDIS_USERNAME || undefined,
   password: process.env.REDIS_PASSWORD || undefined,
   retryStrategy(times: number) {
@@ -20,8 +23,8 @@ const BASE_REDIS_OPTIONS: RedisOptions = {
 };
 
 function buildConnectionOptions() {
-  if (process.env.REDIS_URL) {
-    return process.env.REDIS_URL;
+  if (REDIS_URL) {
+    return REDIS_URL;
   }
   return BASE_REDIS_OPTIONS;
 }
@@ -46,7 +49,7 @@ function registerRedisEvents(client: any, name: string) {
 }
 
 export function createRedisClient(): any {
-  if (!REDIS_ENABLED) {
+  if (!REDIS_CONFIGURED) {
     return null;
   }
   const connectionOptions = buildConnectionOptions();
@@ -58,7 +61,7 @@ export function createRedisClient(): any {
 }
 
 export function getRedisClient(): any {
-  if (!REDIS_ENABLED) {
+  if (!REDIS_CONFIGURED) {
     return null;
   }
   if (!redisClient) {
@@ -68,7 +71,7 @@ export function getRedisClient(): any {
 }
 
 export function getRedisPubClient(): any {
-  if (!REDIS_ENABLED) {
+  if (!REDIS_CONFIGURED) {
     return null;
   }
   if (!pubClient) {
@@ -78,7 +81,7 @@ export function getRedisPubClient(): any {
 }
 
 export function getRedisSubClient(): any {
-  if (!REDIS_ENABLED) {
+  if (!REDIS_CONFIGURED) {
     return null;
   }
   if (!subClient) {
@@ -88,14 +91,14 @@ export function getRedisSubClient(): any {
 }
 
 export function getSocketRedisAdapter() {
-  if (!REDIS_ENABLED) return undefined;
+  if (!REDIS_CONFIGURED) return undefined;
   const publisher = getRedisPubClient();
   const subscriber = getRedisSubClient();
   return createAdapter(publisher, subscriber);
 }
 
 export async function connectRedis() {
-  if (!REDIS_ENABLED) {
+  if (!REDIS_CONFIGURED) {
     return;
   }
   const clients = [getRedisClient(), getRedisPubClient(), getRedisSubClient()];
@@ -103,7 +106,7 @@ export async function connectRedis() {
 }
 
 export async function disconnectRedis() {
-  if (!REDIS_ENABLED) {
+  if (!REDIS_CONFIGURED) {
     redisClient = null;
     pubClient = null;
     subClient = null;
@@ -120,7 +123,6 @@ export async function disconnectRedis() {
 }
 
 export async function setCache(key: string, value: unknown, ttlSeconds?: number) {
-  if (!REDIS_ENABLED) return;
   const redis = getRedisClient();
   if (!redis) return;
   const raw = JSON.stringify(value);
@@ -132,7 +134,6 @@ export async function setCache(key: string, value: unknown, ttlSeconds?: number)
 }
 
 export async function getCache<T = unknown>(key: string): Promise<T | null> {
-  if (!REDIS_ENABLED) return null;
   const redis = getRedisClient();
   if (!redis) return null;
   const raw = await redis.get(key);
@@ -145,14 +146,12 @@ export async function getCache<T = unknown>(key: string): Promise<T | null> {
 }
 
 export async function deleteCache(key: string) {
-  if (!REDIS_ENABLED) return;
   const redis = getRedisClient();
   if (!redis) return;
   await redis.del(key);
 }
 
 export async function getCacheTTL(key: string) {
-  if (!REDIS_ENABLED) return -1;
   const redis = getRedisClient();
   if (!redis) return -1;
   return redis.ttl(key);
