@@ -49,7 +49,7 @@ createWorker('cleanup-jobs', async (job) => {
   if (job.name === 'reconcile-playback-state') {
     const redis = getRedisClient();
     const keys = await redis.keys('room:state:*');
-    await Promise.all(keys.map(async (key) => {
+    await Promise.all(keys.map(async (key: string) => {
       const value = await redis.get(key);
       if (!value) return;
       const state = JSON.parse(value);

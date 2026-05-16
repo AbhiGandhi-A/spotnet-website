@@ -46,6 +46,15 @@ class InMemoryRedis {
     return this.store.get(key) ?? null;
   }
 
+  async keys(pattern: string) {
+    const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
+    const results: string[] = [];
+    for (const k of this.store.keys()) {
+      if (regex.test(k)) results.push(k);
+    }
+    return results;
+  }
+
   async del(key: string) {
     const existed = this.store.delete(key);
     this.ttls.delete(key);
