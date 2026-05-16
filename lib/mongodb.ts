@@ -4,9 +4,18 @@ let client: MongoClient | null = null;
 let db: Db | null = null;
 
 function getDatabaseUrl(): string {
-  const uri = process.env.DATABASE_URL || process.env.MONGODB_URI;
+  const uri = (
+    process.env.DATABASE_URL ||
+    process.env.MONGODB_URI ||
+    process.env.MONGO_URI ||
+    process.env.MONGO_URL ||
+    process.env.DATABASE_URI ||
+    process.env.MONGOLAB_URI
+  )?.trim();
   if (!uri) {
-    throw new Error('Missing MongoDB connection URI. Set DATABASE_URL or MONGODB_URI.');
+    throw new Error(
+      'Missing MongoDB connection URI. Set DATABASE_URL, MONGODB_URI, MONGO_URI, MONGO_URL, DATABASE_URI, or MONGOLAB_URI.'
+    );
   }
   return uri;
 }
