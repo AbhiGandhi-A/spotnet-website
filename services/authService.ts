@@ -78,17 +78,13 @@ export function buildDeviceFingerprint(req: NextRequest) {
 }
 
 export async function rotateRefreshToken(oldRefreshToken: string, userId: string) {
-  try {
-    const decoded = await verifyRefreshToken(oldRefreshToken);
-    const sessionId = (decoded as any).sessionId || uuidv4();
-    if (await isSessionRevoked(sessionId)) {
-      throw new Error('Revoked session');
-    }
-    const refreshToken = await signRefreshToken({ id: userId, sessionId });
-    const accessToken = await signAccessToken({ id: userId, sessionId });
-    await getRedisClient().set(`refresh:${sessionId}`, refreshToken, 'EX', 60 * 60 * 24 * 7);
-    return { accessToken, refreshToken, sessionId };
-  } catch (error) {
-    throw error;
+  const decoded = await verifyRefreshToken(oldRefreshToken);
+  const sessionId = (decoded as any).sessionId || uuidv4();
+  if (await isSessionRevoked(sessionId)) {
+    throw new Error('Revoked session');
   }
+  const refreshToken = await signRefreshToken({ id: userId, sessionId });
+  const accessToken = await signAccessToken({ id: userId, sessionId });
+  await getRedisClient().set(`refresh:${sessionId}`, refreshToken, 'EX', 60 * 60 * 24 * 7);
+  return { accessToken, refreshToken, sessionId };
 }

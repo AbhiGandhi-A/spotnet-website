@@ -15,41 +15,16 @@ function getConnection() {
   return { connection };
 }
 
-class DummyQueue {
-  name: string;
-  jobs: any[] = [];
-  constructor(name: string) { this.name = name; }
-  async add(name: string, data: any, opts?: JobsOptions) {
-    const id = `${Date.now()}`;
-    this.jobs.push({ id, name, data, opts });
-    logWarn('In-memory queue used, job added locally', { queue: this.name, jobId: id });
-    return { id } as any;
-  }
-  async getWaitingCount() { return 0; }
-  async getActiveCount() { return 0; }
-  async getCompletedCount() { return 0; }
-  async getFailedCount() { return 0; }
-  async getDelayedCount() { return 0; }
-}
+export const videoProcessingQueue = REDIS_ENABLED ? new Queue('video-processing', getConnection()) : null;
+export const thumbnailQueue = REDIS_ENABLED ? new Queue('thumbnail-generation', getConnection()) : null;
+export const notificationQueue = REDIS_ENABLED ? new Queue('notification-delivery', getConnection()) : null;
+export const cleanupQueue = REDIS_ENABLED ? new Queue('cleanup-jobs', getConnection()) : null;
+export const analyticsQueue = REDIS_ENABLED ? new Queue('analytics-aggregation', getConnection()) : null;
+export const deadLetterQueue = REDIS_ENABLED ? new Queue('dead-letter-jobs', getConnection()) : null;
 
-class DummyWorker {
-  on() { /* noop */ }
-}
-
-class DummyQueueEvents {
-  on() { /* noop */ }
-}
-
-export const videoProcessingQueue = REDIS_ENABLED ? new Queue('video-processing', getConnection()) : new DummyQueue('video-processing') as any;
-export const thumbnailQueue = REDIS_ENABLED ? new Queue('thumbnail-generation', getConnection()) : new DummyQueue('thumbnail-generation') as any;
-export const notificationQueue = REDIS_ENABLED ? new Queue('notification-delivery', getConnection()) : new DummyQueue('notification-delivery') as any;
-export const cleanupQueue = REDIS_ENABLED ? new Queue('cleanup-jobs', getConnection()) : new DummyQueue('cleanup-jobs') as any;
-export const analyticsQueue = REDIS_ENABLED ? new Queue('analytics-aggregation', getConnection()) : new DummyQueue('analytics-aggregation') as any;
-export const deadLetterQueue = REDIS_ENABLED ? new Queue('dead-letter-jobs', getConnection()) : new DummyQueue('dead-letter-jobs') as any;
-
-export async function addQueueJob(queue: any, name: string, data: any, opts: JobsOptions = {}) {
-  if (!REDIS_ENABLED) {
-    return queue.add(name, data, opts);
+export async function addQueueJob(queue: Queue | null, name: string, data: any, opts: JobsOptions = {}) {
+  if (!queue) {
+    throw new Error('Queue unavailable: Redis is not configured');
   }
   return queue.add(name, data, {
     attempts: opts.attempts ?? 3,
@@ -62,8 +37,7 @@ export async function addQueueJob(queue: any, name: string, data: any, opts: Job
 
 export function createWorker(name: string, processor: (job: any) => Promise<any>, opts: { concurrency?: number } = {}) {
   if (!REDIS_ENABLED) {
-    logWarn('Redis not configured. Workers disabled (in-memory/no-op).');
-    return new DummyWorker() as any;
+    throw new Error('Workers are unavailable: Redis is not configured');
   }
 
   const worker = new Worker(name, async (job) => processor(job), {
@@ -88,9 +62,9 @@ export function createWorker(name: string, processor: (job: any) => Promise<any>
   return worker;
 }
 
-export async function getQueueStatus(queue: any) {
-  if (!REDIS_ENABLED) {
-    return { waiting: 0, active: 0, completed: 0, failed: 0, delayed: 0 };
+export async function getQueueStatus(queue: Queue | null) {
+  if (!queue) {
+    throw new Error('Queue unavailable: Redis is not configured');
   }
   return {
     waiting: await queue.getWaitingCount(),
@@ -103,8 +77,7 @@ export async function getQueueStatus(queue: any) {
 
 export function setupQueueMonitoring() {
   if (!REDIS_ENABLED) {
-    logWarn('Redis not configured. Queue monitoring disabled.');
-    return;
+    throw new Error('Queue monitoring unavailable: Redis is not configured');
   }
   const queueEvents = new QueueEvents('global-events', getConnection());
 
@@ -126,5 +99,8 @@ export function setupQueueMonitoring() {
 }
 
 export async function enqueueDeadLetter(job: any) {
+  if (!deadLetterQueue) {
+    throw new Error('Dead letter queue unavailable: Redis is not configured');
+  }
   await deadLetterQueue.add(`dead-letter-${job.id}`, { originalJob: job }, { removeOnComplete: true });
 }

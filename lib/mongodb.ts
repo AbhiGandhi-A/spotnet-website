@@ -6,7 +6,6 @@ if (!uri) {
 }
 
 const databaseUrl: string = uri;
-
 let client: MongoClient;
 let db: Db;
 

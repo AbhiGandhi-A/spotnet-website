@@ -19,75 +19,6 @@ const BASE_REDIS_OPTIONS: RedisOptions = {
   keepAlive: 10000,
 };
 
-class InMemoryRedis {
-  store: Map<string, string> = new Map();
-  ttls: Map<string, number> = new Map();
-  status = 'ready';
-
-  on() { /* noop */ }
-  async connect() { return; }
-  async quit() { return; }
-
-  async set(key: string, value: string, mode?: string, ttl?: number) {
-    this.store.set(key, value);
-    if (mode === 'EX' && typeof ttl === 'number') {
-      this.ttls.set(key, Date.now() + ttl * 1000);
-    }
-    return 'OK';
-  }
-
-  async get(key: string) {
-    const exp = this.ttls.get(key);
-    if (exp && Date.now() > exp) {
-      this.store.delete(key);
-      this.ttls.delete(key);
-      return null;
-    }
-    return this.store.get(key) ?? null;
-  }
-
-  async keys(pattern: string) {
-    const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
-    const results: string[] = [];
-    for (const k of this.store.keys()) {
-      if (regex.test(k)) results.push(k);
-    }
-    return results;
-  }
-
-  async del(key: string) {
-    const existed = this.store.delete(key);
-    this.ttls.delete(key);
-    return existed ? 1 : 0;
-  }
-
-  async exists(key: string) {
-    const val = await this.get(key);
-    return val ? 1 : 0;
-  }
-
-  async incr(key: string) {
-    const val = Number((await this.get(key)) || 0) + 1;
-    await this.set(key, String(val));
-    return val;
-  }
-
-  async expire(key: string, seconds: number) {
-    if (this.store.has(key)) {
-      this.ttls.set(key, Date.now() + seconds * 1000);
-      return 1;
-    }
-    return 0;
-  }
-
-  async ttl(key: string) {
-    const exp = this.ttls.get(key);
-    if (!exp) return -1;
-    const remaining = Math.ceil((exp - Date.now()) / 1000);
-    return remaining > 0 ? remaining : -2;
-  }
-}
-
 function buildConnectionOptions() {
   if (process.env.REDIS_URL) {
     return process.env.REDIS_URL;
@@ -116,8 +47,7 @@ function registerRedisEvents(client: any, name: string) {
 
 export function createRedisClient(): any {
   if (!REDIS_ENABLED) {
-    console.warn('Redis not configured. Using in-memory fallback.');
-    return new InMemoryRedis();
+    return null;
   }
   const connectionOptions = buildConnectionOptions();
   const client = typeof connectionOptions === 'string'
@@ -128,6 +58,9 @@ export function createRedisClient(): any {
 }
 
 export function getRedisClient(): any {
+  if (!REDIS_ENABLED) {
+    return null;
+  }
   if (!redisClient) {
     redisClient = createRedisClient();
   }
@@ -135,6 +68,9 @@ export function getRedisClient(): any {
 }
 
 export function getRedisPubClient(): any {
+  if (!REDIS_ENABLED) {
+    return null;
+  }
   if (!pubClient) {
     pubClient = createRedisClient();
   }
@@ -142,6 +78,9 @@ export function getRedisPubClient(): any {
 }
 
 export function getRedisSubClient(): any {
+  if (!REDIS_ENABLED) {
+    return null;
+  }
   if (!subClient) {
     subClient = createRedisClient();
   }
@@ -157,11 +96,10 @@ export function getSocketRedisAdapter() {
 
 export async function connectRedis() {
   if (!REDIS_ENABLED) {
-    console.warn('Redis not configured. Skipping connectRedis.');
     return;
   }
   const clients = [getRedisClient(), getRedisPubClient(), getRedisSubClient()];
-  await Promise.all(clients.map((client) => client.connect().catch(() => null)));
+  await Promise.all(clients.map((client) => client?.connect?.().catch(() => null)));
 }
 
 export async function disconnectRedis() {
@@ -172,9 +110,9 @@ export async function disconnectRedis() {
     return;
   }
   await Promise.all([
-    redisClient?.quit(),
-    pubClient?.quit(),
-    subClient?.quit(),
+    redisClient?.quit?.(),
+    pubClient?.quit?.(),
+    subClient?.quit?.(),
   ].filter(Boolean));
   redisClient = null;
   pubClient = null;
@@ -182,7 +120,9 @@ export async function disconnectRedis() {
 }
 
 export async function setCache(key: string, value: unknown, ttlSeconds?: number) {
+  if (!REDIS_ENABLED) return;
   const redis = getRedisClient();
+  if (!redis) return;
   const raw = JSON.stringify(value);
   if (ttlSeconds) {
     await redis.set(key, raw, 'EX', ttlSeconds);
@@ -192,7 +132,9 @@ export async function setCache(key: string, value: unknown, ttlSeconds?: number)
 }
 
 export async function getCache<T = unknown>(key: string): Promise<T | null> {
+  if (!REDIS_ENABLED) return null;
   const redis = getRedisClient();
+  if (!redis) return null;
   const raw = await redis.get(key);
   if (!raw) return null;
   try {
@@ -203,11 +145,15 @@ export async function getCache<T = unknown>(key: string): Promise<T | null> {
 }
 
 export async function deleteCache(key: string) {
+  if (!REDIS_ENABLED) return;
   const redis = getRedisClient();
+  if (!redis) return;
   await redis.del(key);
 }
 
 export async function getCacheTTL(key: string) {
+  if (!REDIS_ENABLED) return -1;
   const redis = getRedisClient();
+  if (!redis) return -1;
   return redis.ttl(key);
 }
