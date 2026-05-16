@@ -25,7 +25,27 @@ export async function connectToDatabase() {
     const databaseUrl = getDatabaseUrl();
     client = new MongoClient(databaseUrl);
     await client.connect();
-    db = client.db();
+    // If an explicit DB name is provided via env, use it. Otherwise use the
+    // database name from the connection string if present; if the connection
+    // string did not include a DB (driver defaults to 'test'), fall back to
+    // the 'spotnet' database.
+    const envDb = (
+      process.env.MONGODB_DB ||
+      process.env.DATABASE_DB ||
+      process.env.MONGO_DB ||
+      process.env.DATABASE_NAME
+    )?.trim();
+
+    if (envDb) {
+      db = client.db(envDb);
+    } else {
+      const inferred = client.db().databaseName;
+      if (inferred && inferred !== 'test') {
+        db = client.db(inferred);
+      } else {
+        db = client.db('spotnet');
+      }
+    }
   }
   return { client, db };
 }

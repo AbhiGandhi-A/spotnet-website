@@ -4,30 +4,14 @@ import { createAdapter } from '@socket.io/redis-adapter';
 const REDIS_URL = process.env.REDIS_URL?.trim();
 const REDIS_HOST = process.env.REDIS_HOST?.trim();
 const REDIS_PORT = process.env.REDIS_PORT?.trim();
-const REDIS_CONFIGURED = Boolean(REDIS_URL || REDIS_HOST || REDIS_PORT);
+const REDIS_USERNAME = process.env.REDIS_USERNAME?.trim();
+const REDIS_PASSWORD = process.env.REDIS_PASSWORD?.trim();
+
+const REDIS_CONFIGURED = Boolean(REDIS_URL || REDIS_HOST);
 
 let redisClient: any = null;
 let pubClient: any = null;
 let subClient: any = null;
-
-const BASE_REDIS_OPTIONS: RedisOptions = {
-  host: REDIS_HOST || '127.0.0.1',
-  port: Number(REDIS_PORT || 6379),
-  username: process.env.REDIS_USERNAME || undefined,
-  password: process.env.REDIS_PASSWORD || undefined,
-  retryStrategy(times: number) {
-    return Math.min(times * 50, 2000);
-  },
-  enableOfflineQueue: true,
-  keepAlive: 10000,
-};
-
-function buildConnectionOptions() {
-  if (REDIS_URL) {
-    return REDIS_URL;
-  }
-  return BASE_REDIS_OPTIONS;
-}
 
 function registerRedisEvents(client: any, name: string) {
   if (!client || !client.on) return;
@@ -50,43 +34,48 @@ function registerRedisEvents(client: any, name: string) {
 
 export function createRedisClient(): any {
   if (!REDIS_CONFIGURED) {
+    console.warn('Redis not configured: REDIS_URL or REDIS_HOST not provided. Skipping Redis client creation.');
     return null;
   }
-  const connectionOptions = buildConnectionOptions();
-  const client = typeof connectionOptions === 'string'
-    ? new Redis(connectionOptions)
-    : new Redis(connectionOptions);
+
+  if (REDIS_URL) {
+    const client = new Redis(REDIS_URL);
+    registerRedisEvents(client, 'client');
+    return client;
+  }
+
+  // Only create a client when a host was explicitly provided. Do NOT default to localhost.
+  const options: RedisOptions = {
+    host: REDIS_HOST as string,
+    port: Number(REDIS_PORT || 6379),
+    username: REDIS_USERNAME || undefined,
+    password: REDIS_PASSWORD || undefined,
+    retryStrategy(times: number) {
+      return Math.min(times * 50, 2000);
+    },
+    enableOfflineQueue: true,
+    keepAlive: 10000,
+  };
+  const client = new Redis(options);
   registerRedisEvents(client, 'client');
   return client;
 }
 
 export function getRedisClient(): any {
-  if (!REDIS_CONFIGURED) {
-    return null;
-  }
-  if (!redisClient) {
-    redisClient = createRedisClient();
-  }
+  if (!REDIS_CONFIGURED) return null;
+  if (!redisClient) redisClient = createRedisClient();
   return redisClient;
 }
 
 export function getRedisPubClient(): any {
-  if (!REDIS_CONFIGURED) {
-    return null;
-  }
-  if (!pubClient) {
-    pubClient = createRedisClient();
-  }
+  if (!REDIS_CONFIGURED) return null;
+  if (!pubClient) pubClient = createRedisClient();
   return pubClient;
 }
 
 export function getRedisSubClient(): any {
-  if (!REDIS_CONFIGURED) {
-    return null;
-  }
-  if (!subClient) {
-    subClient = createRedisClient();
-  }
+  if (!REDIS_CONFIGURED) return null;
+  if (!subClient) subClient = createRedisClient();
   return subClient;
 }
 
@@ -98,9 +87,7 @@ export function getSocketRedisAdapter() {
 }
 
 export async function connectRedis() {
-  if (!REDIS_CONFIGURED) {
-    return;
-  }
+  if (!REDIS_CONFIGURED) return;
   const clients = [getRedisClient(), getRedisPubClient(), getRedisSubClient()];
   await Promise.all(clients.map((client) => client?.connect?.().catch(() => null)));
 }
